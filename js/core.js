@@ -10,7 +10,7 @@ const CONFIG = {
 
   /* TMDB 접근 — 둘 중 하나만 있으면 됨. 둘 다 있으면 KEY 우선 */
   TMDB_KEY: "cf02e99c2d012e292753b5fb79fcc5dc",              // ① 클라이언트 직접 호출 (v3 키, 노출됨)
-  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbysMG_tYdvNHuJGT7DHZsDsyrIGlRz-v8lEhCKVmMj6p3tu4Kulqf1_RKoU…,       // ② Apps Script 웹앱 URL — TMDB 프록시 + 기록 추가 겸용
+  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbysMG_tYdvNHuJGT7DHZsDsyrIGlRz-v8lEhCKVmMj6p3tu4Kulqf1_RKoUKpWXKsiu/exec",       // ② Apps Script 웹앱 URL — TMDB 프록시 + 기록 추가 겸용
 
   APP_TOKEN: "dkssudsksapfhddldi123zbzbzb",             // Apps Script 쓰기 토큰 (Code.gs의 TOKEN과 동일하게)
 
