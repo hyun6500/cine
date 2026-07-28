@@ -38,6 +38,163 @@ function addLocal(rows){
 }
 
 /* ==================================================================
+   ⓪ 기록 수정 (상세 모달 → '수정')
+   ================================================================== */
+let editRow = null;      // 수정 중인 행
+let editWork = null;     // 새로 고른 작품정보 (null이면 작품정보 변경 없음)
+
+function openEdit(r){
+  editRow = r; editWork = null;
+  const sameCount = S.rows.filter(x => x.key === r.key).length;
+
+  $("#edit-body").innerHTML = `
+    <h3>기록 수정 <span class="mono">no.${esc(r.no)}</span></h3>
+
+    <div class="ed-sec"><div class="ed-h">작품 정보</div>
+      <div class="ed-work" id="ed-work"></div>
+      <div class="frow">
+        <div><label class="fl">제목</label><input type="text" id="e-title" class="fin" value="${esc(r.title)}"></div>
+        <div class="w90"><label class="fl">개봉연도</label><input type="text" id="e-year" class="fin" value="${esc(r.year)}"></div>
+      </div>
+      <div class="frow">
+        <div><label class="fl">감독</label><input type="text" id="e-dir" class="fin" value="${esc(r.dir)}"></div>
+        <div><label class="fl">장르 <span class="sub">쉼표 구분</span></label><input type="text" id="e-genre" class="fin" value="${esc(r.genre)}"></div>
+      </div>
+      <div class="frow">
+        <div><label class="fl">제작국가</label><input type="text" id="e-nation" class="fin" value="${esc(r.nation)}"></div>
+        <div class="w90"><label class="fl">TMDB ID</label><input type="text" id="e-tmdb" class="fin" value="${esc(r.tmdb)}"></div>
+        <div class="w90"><label class="fl">타입</label><select id="e-ntype" class="fin">
+          <option value="" ${!r.ntype?"selected":""}>—</option>
+          <option value="movie" ${r.ntype==="movie"?"selected":""}>movie</option>
+          <option value="tv" ${r.ntype==="tv"?"selected":""}>tv</option></select></div>
+      </div>
+      ${sameCount > 1 ? `<label class="ed-chk"><input type="checkbox" id="e-all" checked>
+        같은 작품 <b>${sameCount}회차 전체</b>에 작품 정보 함께 적용</label>` : ""}
+    </div>
+
+    <div class="ed-sec"><div class="ed-h">관람 정보 <span class="sub">이 회차만</span></div>
+      <div class="frow">
+        <div><label class="fl">날짜(대표)</label><input type="date" id="e-date" class="fin" value="${esc(r.date)}"></div>
+        <div><label class="fl">시작일</label><input type="date" id="e-start" class="fin" value="${esc(r.start)}"></div>
+        <div class="w90"><label class="fl">시즌</label><input type="text" id="e-season" class="fin" value="${esc(r.season)}"></div>
+      </div>
+      <div class="frow">
+        <div><label class="fl">카테고리</label><select id="e-cat" class="fin">
+          ${CONFIG.SCOPE.map(c=>`<option ${r.cat===c?"selected":""}>${c}</option>`).join("")}</select></div>
+        <div><label class="fl">플랫폼/상영관</label><input type="text" id="e-plat" class="fin" value="${esc(r.plat)}"></div>
+      </div>
+      <div class="frow">
+        <div><label class="fl">위치/지점</label><input type="text" id="e-place" class="fin" value="${esc(r.place)}"></div>
+        <div class="w90"><label class="fl">상영시각</label><input type="text" id="e-time" class="fin" value="${esc(r.time)}"></div>
+        <div class="w90"><label class="fl">화수</label><input type="text" id="e-eps" class="fin" value="${esc(r.eps)}"></div>
+      </div>
+      <div class="frow">
+        <div><label class="fl">동반/메모</label><input type="text" id="e-memo" class="fin" value="${esc(r.memo)}"></div>
+        <div class="w90"><label class="fl">평점</label><input type="text" id="e-rate" class="fin" value="${esc(r.rate)}"></div>
+        <div><label class="fl">넷플릭스 평가</label><select id="e-nflx" class="fin">
+          <option value=""></option>
+          ${["최고예요","좋아요","별로예요"].map(v=>`<option ${r.nflx===v?"selected":""}>${v}</option>`).join("")}</select></div>
+      </div>
+      <label class="fl">한줄평</label><input type="text" id="e-review" class="fin" value="${esc(r.review)}">
+    </div>
+
+    <div class="fbtns">
+      <button class="primary" id="e-save">시트에 저장</button>
+      <button class="ghost" id="e-cancel">취소</button>
+    </div>`;
+
+  renderEditWork();
+  $("#e-save").onclick = submitEdit;
+  $("#e-cancel").onclick = closeEdit;
+
+  const bg = $("#edit-bg");
+  bg.classList.add("show"); bg.setAttribute("aria-hidden","false");
+  document.body.style.overflow = "hidden";
+}
+
+function renderEditWork(){
+  const w = editWork;
+  const cur = w ? w : { title: editRow.title, year: editRow.year, tmdb: editRow.tmdb, ntype: editRow.ntype, poster: "" };
+  $("#ed-work").innerHTML = `
+    ${cur.poster ? `<img src="${IMG}w92${cur.poster}" alt="">` : '<span class="noimg"></span>'}
+    <div class="wi"><b>${esc(cur.title)}</b>
+      <span class="mono">${cur.tmdb ? esc((cur.ntype||"?")+"/"+cur.tmdb) : "TMDB 미연결"}</span></div>
+    <button type="button" class="chip" id="ed-pick">${cur.tmdb ? "다른 작품으로 교체" : "TMDB에서 찾기"}</button>`;
+  $("#ed-pick").onclick = () => openPicker(editRow.title, editRow.ntype, work => {
+    editWork = work;
+    $("#e-title").value  = work.title || $("#e-title").value;
+    $("#e-year").value   = work.year   || "";
+    $("#e-dir").value    = work.dir    || "";
+    $("#e-genre").value  = work.genre  || "";
+    $("#e-nation").value = work.nation || "";
+    $("#e-tmdb").value   = work.tmdb   || "";
+    $("#e-ntype").value  = work.ntype  || "";
+    renderEditWork();
+  });
+}
+
+function closeEdit(){
+  $("#edit-bg").classList.remove("show");
+  $("#edit-bg").setAttribute("aria-hidden","true");
+  editRow = null; editWork = null;
+  if (!$("#modal-bg").classList.contains("show")) document.body.style.overflow = "";
+}
+
+async function submitEdit(){
+  const r = editRow;
+  if (!r) return;
+  const work = {
+    title:  $("#e-title").value.trim(),
+    year:   $("#e-year").value.trim(),
+    dir:    $("#e-dir").value.trim(),
+    genre:  $("#e-genre").value.trim(),
+    nation: $("#e-nation").value.trim(),
+    tmdb:   $("#e-tmdb").value.trim(),
+    ntype:  $("#e-ntype").value,
+  };
+  const view = {
+    date:   $("#e-date").value,
+    start:  $("#e-start").value,
+    season: $("#e-season").value.trim(),
+    cat:    $("#e-cat").value,
+    plat:   $("#e-plat").value.trim(),
+    place:  $("#e-place").value.trim(),
+    time:   $("#e-time").value.trim(),
+    eps:    $("#e-eps").value.trim(),
+    memo:   $("#e-memo").value.trim(),
+    rate:   $("#e-rate").value.trim(),
+    nflx:   $("#e-nflx").value,
+    review: $("#e-review").value.trim(),
+  };
+  if (!work.title || !view.date){ toast("제목과 날짜는 비울 수 없습니다", "warn"); return; }
+
+  const applyAll = $("#e-all")?.checked;
+  const targets = applyAll ? S.rows.filter(x => x.key === r.key) : [r];
+
+  const btn = $("#e-save");
+  btn.disabled = true; btn.textContent = "저장 중…";
+  try {
+    /* 작품 정보는 대상 전체 / 관람 정보는 이 회차만 */
+    await gsPost({ action:"update", updates: [
+      ...(targets.length > 1 ? [{ nos: targets.map(t=>t.no), fields: work }] : []),
+      { nos: [r.no], fields: targets.length > 1 ? view : { ...work, ...view } },
+    ]});
+
+    targets.forEach(t => Object.assign(t, work));
+    Object.assign(r, view);
+    r.med = medium(r.plat);
+    r.y = +r.date.slice(0,4); r.m = +r.date.slice(5,7);
+
+    buildKeys(); renderStrip(); applyFilters();
+    closeEdit(); closeModal();
+    toast(`‘${work.title}’ 수정 완료`);
+  } catch(e){
+    toast("저장 실패: " + e.message, "warn"); console.error(e);
+  }
+  btn.disabled = false; btn.textContent = "시트에 저장";
+}
+
+/* ==================================================================
    ① 단일 추가
    ================================================================== */
 function renderAdd(){
@@ -65,7 +222,7 @@ function renderAdd(){
 
   /* ② CSV */
   $("#csv-file").addEventListener("change", handleCsvFile);
-  $("#csv-match").onclick = csvTmdbMatch;
+  $("#csv-match").onclick = csvAutoMatch;
   $("#csv-send").onclick = csvSend;
 
   if (!CONFIG.APPS_SCRIPT_URL)
@@ -247,6 +404,7 @@ function buildCsvCands(text){
   });
   csvCands.sort((a,b) => a.date<b.date?1:-1);
   renderCsvPreview();
+  csvAutoMatch();          // ★ 업로드 즉시 자동 조회
 }
 
 function renderCsvPreview(){
@@ -266,7 +424,13 @@ function renderCsvPreview(){
         <input type="text" class="ss" data-i="${i}" data-f="season" value="${esc(c.season)}" ${c.type==="movie"?"disabled":""}>
         <span class="mono">${c.start===c.date?esc(c.date):esc(c.start)+"~"+esc(c.date.slice(5))}</span>
         <span class="mono">${esc(c.eps)}</span>
-        <span class="mono tm" data-i="${i}">${c.tmdb?esc(c.ntype+"/"+c.tmdb):"—"}</span>
+        <span class="tmc">${c.tmdb
+          ? `<button class="tmb ok" data-pick="${i}" title="${esc(c.ntype+"/"+c.tmdb)}">${esc(c.year||"확정")}</button>`
+          : c.amb
+            ? `<button class="tmb amb" data-pick="${i}">선택 ${c.amb}건</button>`
+            : c.searched
+              ? `<button class="tmb" data-pick="${i}">직접 찾기</button>`
+              : `<span class="tmb wait">조회 중…</span>`}</span>
         <span class="st ${c.status}">${c.status}${c.hitDate?` <i>${esc(c.hitDate)}</i>`:""}</span>
       </div>`).join("")}
     </div>`;
@@ -277,42 +441,61 @@ function renderCsvPreview(){
   el.querySelectorAll('input[type="text"]').forEach(inp => inp.onchange = e => {
     csvCands[+e.target.dataset.i][e.target.dataset.f] = e.target.value.trim();
   });
+  el.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => {
+    const c = csvCands[+b.dataset.pick];
+    openPicker(c.title, c.type==="series" ? "tv" : "movie", w => {
+      c.tmdb = w.tmdb; c.ntype = w.ntype; c.year = w.year;
+      c.dirT = w.dir; c.genreT = w.genre; c.nation = w.nation;
+      c.amb = 0;
+      renderCsvPreview();
+    });
+  });
   $("#csv-actions").style.display = "";
 }
 
-/* 선택 행 TMDB 매칭 — 정규화 제목 완전 일치일 때만 채움 (오매칭 방지) */
-async function csvTmdbMatch(){
-  if (!tmdbReady()){ toast("TMDB 키/프록시가 없어 매칭할 수 없습니다", "warn"); return; }
-  const btn = $("#csv-match");
-  btn.disabled = true;
-  let hit = 0, miss = 0;
+/* 자동 TMDB 매칭
+   ★ 완전 일치 후보가 1건일 때만 자동 확정. 2건 이상이면 채우지 않고 사용자가 고르게 한다
+     ('마더' → 봉준호/아로노프스키처럼 동명이작이 실제로 존재하므로 첫 결과를 믿으면 안 됨) */
+async function csvAutoMatch(){
+  if (!tmdbReady()){
+    csvCands.forEach(c => c.searched = true);
+    renderCsvPreview();
+    toast("TMDB 키/프록시가 없어 자동 조회를 건너뜁니다", "warn");
+    return;
+  }
+  let ok = 0, amb = 0, miss = 0;
   for (const c of csvCands){
-    if (!c.checked || c.tmdb) continue;
+    if (c.tmdb || !c.checked){ c.searched = true; continue; }
+    const ty = c.type === "series" ? "tv" : "movie";
     try {
       const q = c.title.replace(/\(.*?\)/g,"").trim();
-      const d = await tmdb(c.type==="series" ? "/search/tv" : "/search/movie", { query: q });
-      const m = (d.results||[]).find(x => normT(x.name||x.title)===normT(q));
-      if (m){
-        c.tmdb = String(m.id); c.ntype = c.type==="series" ? "tv" : "movie";
+      const d = await tmdb(ty==="tv" ? "/search/tv" : "/search/movie", { query: q });
+      const exact = (d.results||[]).filter(x => normT(x.name||x.title) === normT(q));
+      if (exact.length === 1){
+        const m = exact[0];
+        c.tmdb = String(m.id); c.ntype = ty;
         c.year = (m.first_air_date||m.release_date||"").slice(0,4);
         try {
-          if (c.ntype==="movie"){
+          if (ty === "movie"){
             const dd = await tmdb(`/movie/${m.id}`, { append_to_response:"credits" });
             c.genreT = (dd.genres||[]).map(g=>g.name).join(", ");
             c.dirT = (dd.credits?.crew||[]).filter(x=>x.job==="Director").map(x=>x.name).join(", ");
+            c.nation = (dd.production_countries||[]).map(x=>x.name).join(", ");
           } else {
             const dd = await tmdb(`/tv/${m.id}`);
             c.genreT = (dd.genres||[]).map(g=>g.name).join(", ");
             c.dirT = (dd.created_by||[]).map(x=>x.name).join(", ");
+            c.nation = (dd.production_countries||[]).map(x=>x.name).join(", ");
           }
         } catch(e){}
-        hit++;
-      } else miss++;
+        ok++;
+      } else if (exact.length > 1){ c.amb = exact.length; amb++; }
+      else miss++;
     } catch(e){ miss++; }
+    c.searched = true;
+    renderCsvPreview();
   }
-  btn.disabled = false;
-  renderCsvPreview();
-  toast(`TMDB 매칭 완료 — 확정 ${hit} · 미확정 ${miss} (완전 일치만 채웠습니다)`);
+  toast(`자동 조회 완료 — 확정 ${ok}${amb?` · 선택 필요 ${amb}`:""}${miss?` · 미확정 ${miss}`:""}`);
 }
 
 async function csvSend(){
@@ -323,7 +506,7 @@ async function csvSend(){
     cat: c.type==="series" ? "시리즈" : "영화",
     plat: "넷플릭스", place: "", title: c.title,
     eps: c.eps, time: "", src: "넷플릭스CSV(앱)", memo: "", rate: "", review: "",
-    year: c.year, dirT: c.dirT, genreT: c.genreT,
+    year: c.year, dirT: c.dirT, genreT: c.genreT, nation: c.nation || "",
     tmdb: c.tmdb, ntype: c.ntype, tmdbStatus: c.tmdb ? "앱검색확정" : "",
     season: c.type==="series" ? c.season : "", status: "완료", nflx: "",
   }));

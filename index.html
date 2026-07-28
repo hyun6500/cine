@@ -56,6 +56,7 @@
       </div>
     </div>
     <div class="strip-wrap"><div class="strip" id="strip"></div></div>
+    <div class="filter-note" id="fnote"></div>
 
     <!-- 0. 둘러보기 -->
     <section id="sec-browse" class="show">
@@ -64,8 +65,7 @@
 
     <!-- 1. 대시보드 -->
     <section id="sec-dash">
-      <div class="sec-head"><h2>대시보드</h2><span class="cnt" id="dash-cnt"></span>
-        <span class="filter-note" id="fnote"></span></div>
+      <div class="sec-head"><h2>대시보드</h2><span class="cnt" id="dash-cnt"></span></div>
       <div class="grid" id="dash-grid"></div>
     </section>
 
@@ -166,11 +166,36 @@
   </div>
 </div>
 
+<div class="modal-bg" id="edit-bg" aria-hidden="true">
+  <div class="modal narrow" role="dialog" aria-modal="true">
+    <button class="x" id="edit-x" aria-label="닫기">✕</button>
+    <div class="ed-body" id="edit-body"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="picker-bg" aria-hidden="true">
+  <div class="modal narrow" role="dialog" aria-modal="true">
+    <button class="x" id="pk-x" aria-label="닫기">✕</button>
+    <div class="pk-body">
+      <h3>TMDB에서 작품 찾기</h3>
+      <div class="frow">
+        <div><input type="search" id="pk-q" class="fin" placeholder="제목 검색" autocomplete="off"></div>
+        <div class="w120"><select id="pk-type" class="fin">
+          <option value="">전체</option><option value="movie">영화</option><option value="tv">TV·시리즈</option>
+        </select></div>
+      </div>
+      <p class="sub-p">동명이작이 있으면 연도와 포스터로 구분해 고르세요.</p>
+      <div class="pk-res" id="pk-res"></div>
+    </div>
+  </div>
+</div>
+
 <div id="toasts" aria-live="polite"></div>
 
 <footer>주현 시네마테크 · Data: Google Sheets · Posters: <a href="https://www.themoviedb.org" target="_blank" rel="noopener">TMDB</a> · 분류: KOBIS(영진위)·영등위</footer>
 
-<!-- 로드 순서: core → poster → widgets → page-* → main -->
+<!-- 로드 순서: config → core → poster → widgets → page-* → main -->
+<script src="js/config.js"></script>
 <script src="js/core.js"></script>
 <script src="js/poster.js"></script>
 <script src="js/widgets.js"></script>

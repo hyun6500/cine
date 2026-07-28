@@ -16,10 +16,19 @@ function init(){
   $("#more").onclick = () => renderWallGrid(false);
   $("#more-d").onclick = () => renderDiary(false);
 
-  /* 모달 */
+  /* 모달 3종 — 겹쳐 열릴 수 있으므로 위에서부터 닫는다 */
   $("#modal-x").onclick = closeModal;
   $("#modal-bg").onclick = e => { if (e.target.id==="modal-bg") closeModal(); };
-  document.addEventListener("keydown", e => { if (e.key==="Escape") closeModal(); });
+  $("#edit-x").onclick = closeEdit;
+  $("#edit-bg").onclick = e => { if (e.target.id==="edit-bg") closeEdit(); };
+  $("#pk-x").onclick = closePicker;
+  $("#picker-bg").onclick = e => { if (e.target.id==="picker-bg") closePicker(); };
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    if ($("#picker-bg").classList.contains("show")) closePicker();
+    else if ($("#edit-bg").classList.contains("show")) closeEdit();
+    else closeModal();
+  });
 
   /* 데모 */
   $("#demo-btn").onclick = loadDemo;

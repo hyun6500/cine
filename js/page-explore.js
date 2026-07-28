@@ -5,11 +5,12 @@
    ===================================================================== */
 
 const EXP_AXES = [
-  { id:"genre",  lb:"장르",   keys: r => r.genre  ? r.genre.split(",").map(s=>s.trim()) : [] },
-  { id:"dir",    lb:"감독",   keys: r => r.dir    ? r.dir.split(",").map(s=>s.trim())   : [] },
-  { id:"year",   lb:"연도",   keys: r => [String(r.y)] },
-  { id:"plat",   lb:"플랫폼", keys: r => [r.plat || "미상"] },
-  { id:"nation", lb:"국가",   keys: r => r.nation ? r.nation.split(",").map(s=>s.trim()) : [] },
+  { id:"genre",  lb:"장르",     keys: r => r.genre  ? r.genre.split(",").map(s=>s.trim()) : [] },
+  { id:"dir",    lb:"감독",     keys: r => r.dir    ? r.dir.split(",").map(s=>s.trim())   : [] },
+  { id:"ryear",  lb:"관람연도", keys: r => [String(r.y)] },
+  { id:"pyear",  lb:"개봉연도", keys: r => r.year ? [String(r.year)] : [] },
+  { id:"plat",   lb:"플랫폼",   keys: r => [r.plat || "미상"] },
+  { id:"nation", lb:"국가",     keys: r => r.nation ? r.nation.split(",").map(s=>s.trim()) : [] },
 ];
 
 let expIO = null;      // 탐색 그리드 레이지 로드
@@ -29,7 +30,7 @@ function renderExplore(){
   /* 그룹 목록 */
   const ax = expAxis();
   const groups = topN(S.view.flatMap(r => ax.keys(r).map(k => ({k}))), x => x.k, 200);
-  if (ax.id === "year") groups.sort((a,b) => b[0].localeCompare(a[0]));
+  if (ax.id === "ryear" || ax.id === "pyear") groups.sort((a,b) => b[0].localeCompare(a[0]));
   if (E.group && !groups.some(([k]) => k === E.group)) E.group = null;
   if (!E.group && groups.length) E.group = groups[0][0];
 
@@ -135,12 +136,15 @@ async function loadUnseen(name, watchedItems){
   }
 }
 
-/* 대시보드 감독 클릭 진입점 */
-function openDirector(name){
-  S.explore.axis = "dir";
-  S.explore.group = name;
+/* 외부 진입점 — 상세 모달의 감독·연도·장르·국가·플랫폼 클릭, 대시보드 감독 랭킹 */
+function openExplore(axis, group){
+  if (!EXP_AXES.some(a => a.id === axis)) return;
+  S.explore.axis = axis;
+  S.explore.group = group;
   S.dirty.explore = true;
   switchTab("explore");
+  $("#sec-explore").scrollIntoView({ block: "start", behavior: "smooth" });
 }
+function openDirector(name){ openExplore("dir", name); }
 
 RENDERERS.explore = renderExplore;

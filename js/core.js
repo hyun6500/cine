@@ -3,19 +3,17 @@
    CONFIG · 상수 · 전역 상태 S · 시트 로딩/파싱 · 파생지표 · 필터 · 탭 라우팅
    ===================================================================== */
 
-/* ---------------- CONFIG ---------------- */
-const CONFIG = {
-  SHEET_ID: "1xf26fIHRUzwIv2brREBzJZTg_mRwCoXzQbP4WDYTl-4",
+/* ---------------- CONFIG ----------------
+   실제 값은 js/config.js 에서 설정합니다 (window.CINE_CONFIG).
+   이 파일을 새 버전으로 덮어써도 개인 키는 보존됩니다. */
+const CONFIG = Object.assign({
+  SHEET_ID: "",
   SHEET_NAME: "시청기록",
-
-  /* TMDB 접근 — 둘 중 하나만 있으면 됨. 둘 다 있으면 KEY 우선 */
-  TMDB_KEY: "cf02e99c2d012e292753b5fb79fcc5dc",              // ① 클라이언트 직접 호출 (v3 키, 노출됨)
-  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbysMG_tYdvNHuJGT7DHZsDsyrIGlRz-v8lEhCKVmMj6p3tu4Kulqf1_RKoUKpWXKsiu/exec",       // ② Apps Script 웹앱 URL — TMDB 프록시 + 기록 추가 겸용
-
-  APP_TOKEN: "dkssudsksapfhddldi123zbzbzb",             // Apps Script 쓰기 토큰 (Code.gs의 TOKEN과 동일하게)
-
+  TMDB_KEY: "",              // ① 클라이언트 직접 호출 (v3 키, 노출됨)
+  APPS_SCRIPT_URL: "",       // ② Apps Script 웹앱 URL — TMDB 프록시 + 기록 추가/수정 겸용
+  APP_TOKEN: "",             // Apps Script 쓰기 토큰 (Code.gs의 TOKEN과 동일하게)
   SCOPE: ["영화", "시리즈", "드라마", "다큐멘터리", "예능"],
-};
+}, window.CINE_CONFIG || {});
 
 /* ---------------- 상수 ---------------- */
 const THEATERS = ["CGV","메가박스","롯데시네마","아트하우스모모","씨네큐브","에무시네마","인디스페이스","마포아트센터"];
@@ -41,7 +39,10 @@ const S = {
 const $  = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const normT = t => (t||"").replace(/\(.*?\)/g,"").replace(/[\s,.\-:·!?'"“”<>《》「」!~]/g,"").toLowerCase();
+/* 제목 정규화 — ★ ! ? 는 작품을 가르는 정보라 남긴다 ('마더!'(아로노프스키) ≠ '마더'(봉준호)) */
+const normT = t => (t||"").replace(/\(.*?\)/g,"").replace(/[\s,.\-:·'"“”<>《》「」~]/g,"").toLowerCase();
+/* 백필용 — 원문 제목 그대로(공백만 정리). 정규화보다 엄격해 오병합을 막는다 */
+const rawT = t => (t||"").trim().replace(/\s+/g," ").toLowerCase();
 
 function topN(arr, keyf, n){
   const c = {};
@@ -111,10 +112,10 @@ function mapRow(h, r){
 function buildKeys(){
   // 1) 제목→ID 백필: 같은 작품인데 한쪽 행에만 ID가 있는 경우(재관람 지연기록 등) 보정
   const t2id = {};
-  S.rows.forEach(r => { if (r.tmdb) t2id[normT(r.title)+"|"+(r.season||"")] = r.tmdb+"|"+r.ntype; });
+  S.rows.forEach(r => { if (r.tmdb) t2id[rawT(r.title)+"|"+(r.season||"")] = r.tmdb+"|"+r.ntype; });
   S.rows.forEach(r => {
     if (!r.tmdb){
-      const hit = t2id[normT(r.title)+"|"+(r.season||"")];
+      const hit = t2id[rawT(r.title)+"|"+(r.season||"")];
       if (hit){ const [id,ty] = hit.split("|"); r.tmdb = id; r.ntype = r.ntype || ty; }
     }
     r.key = r.tmdb ? `id:${r.tmdb}:s${r.season||0}` : normT(r.title);
@@ -188,11 +189,21 @@ function applyFilters(){
     (S.year===null || r.y===S.year) &&
     (!q || r.title.toLowerCase().includes(q) || r.dir.toLowerCase().includes(q)));
 
-  const fn = $("#fnote");
-  if (S.year){
-    fn.innerHTML = `${S.year}년 필터 중 <button id="fclear">해제</button>`;
+  /* 필터 배너 — 연도·검색어가 걸려 있으면 항상 보이게 (탭을 옮겨도 유지되므로) */
+  const fn = $("#fnote"), tags = [];
+  if (S.year) tags.push(`<span class="ftag">${S.year}년<button data-clr="year" aria-label="연도 필터 해제">✕</button></span>`);
+  if (q) tags.push(`<span class="ftag">‘${esc(S.q.trim())}’ 검색<button data-clr="q" aria-label="검색 해제">✕</button></span>`);
+  if (tags.length){
+    fn.innerHTML = `<span class="flb">필터</span>${tags.join("")}
+      <span class="fcnt">${S.view.length.toLocaleString()}편</span>
+      <button class="fall" data-clr="all">전체 해제</button>`;
     fn.classList.add("show");
-    $("#fclear").onclick = () => { S.year=null; renderStrip(); applyFilters(); };
+    fn.querySelectorAll("[data-clr]").forEach(b => b.onclick = () => {
+      const k = b.dataset.clr;
+      if (k==="year" || k==="all") S.year = null;
+      if (k==="q"    || k==="all"){ S.q = ""; $("#q").value = ""; }
+      renderStrip(); applyFilters();
+    });
   } else fn.classList.remove("show");
 
   $("#h-total").textContent = S.rows.length.toLocaleString();

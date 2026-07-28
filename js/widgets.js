@@ -34,32 +34,131 @@ function toast(msg, kind = ""){
 }
 
 /* ---------------- 상세 모달 ---------------- */
+/* 탐색 이동용 링크 조각 */
+function xlink(axis, val, cls){
+  return `<button class="xlink${cls?" "+cls:""}" data-ax="${esc(axis)}" data-gv="${esc(val)}">${esc(val)}</button>`;
+}
+
 function openModal(r){
   const all = S.rows.filter(x => x.key===r.key).sort((a,b) => a.date < b.date ? 1 : -1);
+  const dirs = r.dir ? r.dir.split(",").map(s=>s.trim()).filter(Boolean) : [];
+  const nats = r.nation ? r.nation.split(",").map(s=>s.trim()).filter(Boolean) : [];
+  const gens = r.genre ? r.genre.split(",").map(s=>s.trim()).filter(Boolean) : [];
+
+  const meta = [];
+  if (r.year) meta.push(xlink("pyear", r.year, "yr"));
+  if (dirs.length) meta.push(`감독 ${dirs.map(d=>xlink("dir", d)).join(", ")}`);
+  if (nats.length) meta.push(nats.map(n=>xlink("nation", n)).join(", "));
+
   $("#modal-body").innerHTML = `
     <div class="mo-poster" id="mp"><div class="ph2">${esc(r.title)}</div></div>
     <div class="mo-info">
       <div class="cat">${esc(r.cat)}${r.grade ? " · " + esc(r.grade) : ""}</div>
       <h2>${esc(r.title)}${seasonTag(r)}</h2>
-      <div class="meta">
-        ${r.year ? `<b>${esc(r.year)}</b> · ` : ""}${r.dir ? `감독 <b>${esc(r.dir)}</b>` : ""}${r.nation ? ` · ${esc(r.nation)}` : ""}
-      </div>
-      ${r.genre ? `<div class="gpills">${r.genre.split(",").map(g=>`<span class="gpill">${esc(g.trim())}</span>`).join("")}</div>` : ""}
+      <div class="meta">${meta.join(" · ") || '<span class="nodata">작품 정보 없음 — 아래 수정에서 채울 수 있습니다</span>'}</div>
+      ${gens.length ? `<div class="gpills">${gens.map(g=>xlink("genre", g, "gpill")).join("")}</div>` : ""}
       ${r.nflx ? `<div class="nfx-line">${nflxBadge(r, true)} <span>넷플릭스에서 ‘${esc(r.nflx)}’로 평가</span></div>` : ""}
       <div class="mo-log"><h4>MY LOG · ${all.length}회 관람</h4>
         ${all.map(v => `<div class="viewing">
           <span class="k">DATE</span><span class="v">${v.start!==v.date ? esc(v.start)+" ~ " : ""}${esc(v.date)}${v.eps ? ` <span class="sub">(${esc(v.eps)}화)</span>` : ""}${v.season ? ` <span class="sub">시즌 ${esc(v.season)}</span>` : ""}</span>
-          ${v.plat ? `<span class="k">WHERE</span><span class="v">${esc(v.plat)}${v.place && v.place!==v.plat ? ` <span class="sub">${esc(v.place)}</span>` : ""}${v.time ? ` <span class="sub">${esc(v.time)}</span>` : ""}</span>` : ""}
+          ${v.plat ? `<span class="k">WHERE</span><span class="v">${xlink("plat", v.plat)}${v.place && v.place!==v.plat ? ` <span class="sub">${esc(v.place)}</span>` : ""}${v.time ? ` <span class="sub">${esc(v.time)}</span>` : ""}</span>` : ""}
           ${v.memo ? `<span class="k">WITH</span><span class="v">${esc(v.memo)}</span>` : ""}
           ${v.rate ? `<span class="k">RATE</span><span class="v">★ ${esc(v.rate)}</span>` : ""}
+          <span class="k"></span><span class="v"><button class="vedit" data-no="${esc(v.no)}">수정</button></span>
         </div>`).join("")}
         ${(() => { const rv = all.find(v=>v.review); return rv ? `<div class="mo-quote">“${esc(rv.review)}”</div>` : ""; })()}
       </div>
     </div>`;
+
+  /* 메타 클릭 → 탐색 탭으로 */
+  $("#modal-body").querySelectorAll(".xlink").forEach(b => b.onclick = () => {
+    closeModal();
+    openExplore(b.dataset.ax, b.dataset.gv);
+  });
+  /* 회차 수정 */
+  $("#modal-body").querySelectorAll(".vedit").forEach(b => b.onclick = () => {
+    const v = all.find(x => String(x.no) === b.dataset.no);
+    if (v) openEdit(v);
+  });
+
   posterFor(r).then(p => { if (p) $("#mp").innerHTML = `<img src="${IMG}w500${p}" alt="${esc(r.title)} 포스터">`; });
   const bg = $("#modal-bg");
   bg.classList.add("show"); bg.setAttribute("aria-hidden","false");
   document.body.style.overflow = "hidden";
+}
+
+/* ---------------- TMDB 작품 선택기 (수정·CSV 공용) ---------------- */
+/* openPicker(기본검색어, 타입힌트, 선택콜백) — 콜백에 정규화된 작품정보 전달 */
+function openPicker(defaultQ, typeHint, onPick){
+  const bg = $("#picker-bg");
+  bg.classList.add("show"); bg.setAttribute("aria-hidden","false");
+  document.body.style.overflow = "hidden";
+  const inp = $("#pk-q"), res = $("#pk-res");
+  $("#pk-type").value = typeHint || "";
+  inp.value = defaultQ || "";
+  res.innerHTML = "";
+  inp.focus();
+
+  let timer = null;
+  const run = async () => {
+    const q = inp.value.trim();
+    if (q.length < 1){ res.innerHTML = ""; return; }
+    if (!tmdbReady()){ res.innerHTML = '<div class="hint">TMDB 키/프록시가 없어 검색할 수 없습니다</div>'; return; }
+    res.innerHTML = '<div class="hint">검색 중…</div>';
+    const ty = $("#pk-type").value;
+    try {
+      const path = ty==="movie" ? "/search/movie" : ty==="tv" ? "/search/tv" : "/search/multi";
+      const d = await tmdb(path, { query: q });
+      const list = (d.results||[]).filter(x => ty || x.media_type==="movie" || x.media_type==="tv").slice(0,12);
+      if (!list.length){ res.innerHTML = '<div class="hint">결과 없음</div>'; return; }
+      res.innerHTML = "";
+      list.forEach(x => {
+        const mt = ty || x.media_type;
+        const t = x.title || x.name, yr = (x.release_date || x.first_air_date || "").slice(0,4);
+        const c = document.createElement("button");
+        c.className = "pk-card"; c.type = "button";
+        c.innerHTML = `${x.poster_path ? `<img src="${IMG}w185${x.poster_path}" alt="">` : '<span class="noimg"></span>'}
+          <span class="ti">${esc(t)}</span>
+          <span class="mt">${yr||"—"} · ${mt==="tv"?"TV":"영화"} · ${mt}/${x.id}</span>`;
+        c.onclick = () => choose(x, mt);
+        res.appendChild(c);
+      });
+    } catch(e){ res.innerHTML = '<div class="hint">검색 실패</div>'; }
+  };
+
+  const choose = async (x, mt) => {
+    const out = {
+      tmdb: String(x.id), ntype: mt, title: x.title || x.name,
+      year: (x.release_date || x.first_air_date || "").slice(0,4),
+      dir: "", genre: "", nation: "", poster: x.poster_path || "",
+    };
+    try {
+      if (mt === "movie"){
+        const d = await tmdb(`/movie/${x.id}`, { append_to_response: "credits" });
+        out.genre = (d.genres||[]).map(g=>g.name).join(", ");
+        out.dir = (d.credits?.crew||[]).filter(c=>c.job==="Director").map(c=>c.name).join(", ");
+        out.nation = (d.production_countries||[]).map(c=>c.name).join(", ");
+      } else {
+        const d = await tmdb(`/tv/${x.id}`);
+        out.genre = (d.genres||[]).map(g=>g.name).join(", ");
+        out.dir = (d.created_by||[]).map(c=>c.name).join(", ");
+        out.nation = (d.production_countries||[]).map(c=>c.name).join(", ");
+      }
+    } catch(e){}
+    closePicker();
+    onPick(out);
+  };
+
+  inp.oninput = () => { clearTimeout(timer); timer = setTimeout(run, 350); };
+  $("#pk-type").onchange = run;
+  if (defaultQ) run();
+}
+
+function closePicker(){
+  $("#picker-bg").classList.remove("show");
+  $("#picker-bg").setAttribute("aria-hidden","true");
+  if (!$("#modal-bg").classList.contains("show") && !$("#edit-bg").classList.contains("show"))
+    document.body.style.overflow = "";
 }
 
 function closeModal(){
