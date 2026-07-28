@@ -145,8 +145,13 @@ select.chip:focus{outline:none;border-color:var(--marquee)}
 .hbar{display:flex;flex-direction:column;gap:9px}
 .hb{display:grid;grid-template-columns:110px 1fr 44px;align-items:center;gap:10px;font-size:13px}
 .hb .nm{color:var(--silver);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hb .tr{height:9px;background:#10141A;border-radius:99px;overflow:hidden}
-.hb .fl{height:100%;border-radius:99px;background:var(--marquee)}
+.hb .tr{display:block;height:9px;background:#10141A;border-radius:99px;overflow:hidden}
+/* ★ .fl은 그리드 자식이 아니라 인라인으로 남아 width %가 무시됐다 → 반드시 block */
+.hb .fl{display:block;height:100%;min-width:2px;border-radius:99px;background:var(--marquee);
+  transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.hb.clickable{cursor:pointer;border-radius:6px;margin:0 -6px;padding:0 6px;transition:background .12s}
+.hb.clickable:hover{background:var(--panel-2)}
+.hb.clickable:hover .nm{color:var(--marquee)}
 .hb .vl{font-family:var(--font-mono);font-size:12px;color:var(--dim);text-align:right}
 .nf-note{margin-top:12px;font-size:12px;color:var(--faint)}
 
@@ -412,6 +417,24 @@ select.chip:focus{outline:none;border-color:var(--marquee)}
 .pk-card .ti{font-size:12px;font-weight:600;line-height:1.35;word-break:keep-all}
 .pk-card .mt{font-family:var(--font-mono);font-size:10px;color:var(--faint)}
 
+/* 모달 제목 외부 링크 */
+.tlink{text-decoration:none;transition:color .12s}
+.tlink:hover{color:var(--marquee)}
+.tlink .ext{font-family:var(--font-mono);font-size:.5em;color:var(--faint);vertical-align:super;margin-left:5px}
+.tlink:hover .ext{color:var(--marquee)}
+.xtra{display:flex;gap:14px;margin:2px 0 8px;font-size:11.5px}
+.xtra a{color:var(--faint);text-decoration:none;border-bottom:1px dashed var(--line)}
+.xtra a:hover{color:var(--marquee);border-color:var(--marquee-deep)}
+.xtra .mono{font-family:var(--font-mono)}
+
+/* 탐색 — 축 라벨 · 카테고리 내부 장르 */
+.exp-head h3 .axlb{display:inline-block;font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;
+  color:var(--marquee);background:var(--panel-2);border:1px solid var(--line);border-radius:99px;
+  padding:2px 9px;margin-right:9px;vertical-align:middle}
+.exp-sub{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:-6px 0 16px;font-size:12px;color:var(--faint)}
+.exp-sub .gpill{font-size:11.5px;padding:3px 10px}
+.exp-sub .gpill i{font-family:var(--font-mono);font-style:normal;color:var(--faint);margin-left:3px}
+
 /* CSV TMDB 상태 셀 */
 .tmc{min-width:0}
 .tmb{font-family:var(--font-mono);font-size:10.5px;padding:3px 8px;border-radius:99px;border:1px solid var(--line);background:var(--panel-2);color:var(--dim);white-space:nowrap}
@@ -419,6 +442,35 @@ select.chip:focus{outline:none;border-color:var(--marquee)}
 .tmb.ok{border-color:var(--marquee-deep);color:var(--marquee)}
 .tmb.amb{border-color:var(--ticket);color:var(--ticket)}
 .tmb.wait{opacity:.5;border-style:dashed}
+
+/* MY LOG 병합·삭제 */
+.mo-log-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.mo-log-head h4{margin-bottom:0}
+.vmerge{font-family:var(--font-mono);font-size:10.5px;color:var(--ticket);border:1px solid var(--ticket);border-radius:99px;padding:3px 12px;background:transparent}
+.vmerge:disabled{color:var(--faint);border-color:var(--line);cursor:default}
+.viewing{display:flex;gap:10px;align-items:flex-start}
+.viewing .vsel{margin-top:4px;flex:none;accent-color:var(--ticket)}
+.viewing .vgrid{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;flex:1;min-width:0}
+.vbtns{display:flex;gap:6px}
+.vdel:hover{color:var(--ticket);border-color:var(--ticket)}
+
+/* 중복 점검 */
+.chip.dupe.on{background:var(--ticket);border-color:var(--ticket);color:#fff}
+.dupe-g{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px;background:var(--panel)}
+.dupe-h{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px}
+.dupe-h .kind{font-size:11px;font-weight:700;color:var(--ticket);background:rgba(200,85,61,.12);border:1px solid rgba(200,85,61,.4);padding:2px 9px;border-radius:99px}
+.dupe-h .dupe-btns{margin-left:auto;display:flex;gap:6px}
+.dupe-r{display:grid;grid-template-columns:64px 1fr auto;gap:4px 12px;align-items:baseline;padding:6px 0;border-top:1px dashed var(--line);font-size:13px}
+.dupe-r .ti{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dupe-r .sub2{font-size:11.5px;color:var(--faint);grid-column:2/4}
+.dupe-r > .sub2:last-child{grid-column:2/4}
+.dupe-r .mono{font-family:var(--font-mono);font-size:11px;color:var(--dim)}
+@media(max-width:560px){.dupe-r{grid-template-columns:52px 1fr}}
+
+/* 토스트 액션 버튼 */
+#toasts .toast{pointer-events:auto;display:flex;align-items:center;gap:12px}
+.tact{font-size:12.5px;font-weight:700;color:var(--marquee);border:1px solid var(--marquee-deep);border-radius:99px;padding:4px 14px;white-space:nowrap}
+.tact:hover{background:var(--marquee);color:#1A1408}
 
 /* ---------- ⑬ 토스트 · 설정 · 푸터 ---------- */
 #toasts{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}

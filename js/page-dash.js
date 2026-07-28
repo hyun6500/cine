@@ -54,24 +54,24 @@ function renderDash(){
         <span><i style="background:var(--etc)"></i>기타<span class="v">${etc}</span></span>
       </div></div></div>
 
-  <div class="card c-4"><h3>카테고리 <span class="mono">FORMAT</span></h3><div class="hbar">
-    ${cats.map(([k,v])=>`<div class="hb"><span class="nm">${esc(k)}</span><span class="tr"><span class="fl" style="width:${v/(cats[0][1]||1)*100}%;background:${catColors[k]||"var(--etc)"}"></span></span><span class="vl">${v}</span></div>`).join("")}
+  <div class="card c-4"><h3>카테고리 <span class="mono">FORMAT · 클릭하면 모아보기</span></h3><div class="hbar" id="dash-cats">
+    ${cats.map(([k,v])=>`<div class="hb clickable" data-ax="cat" data-gv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="tr"><span class="fl" style="width:${v/(cats[0][1]||1)*100}%;background:${catColors[k]||"var(--etc)"}"></span></span><span class="vl">${v}</span></div>`).join("")}
   </div></div>
 
   <div class="card c-4"><h3>월별 리듬 <span class="mono">SEASON</span></h3><div class="months">
     ${mo.map((v,i)=>`<div class="mo" style="background:rgba(245,185,66,${(v/moMax*0.34).toFixed(2)})"><span class="n">${i+1}월</span><span class="v">${v}</span></div>`).join("")}
   </div></div>
 
-  <div class="card c-6"><h3>가장 자주 만난 장르 <span class="mono">GENRE</span></h3><div class="hbar">
-    ${genres.map(([k,v])=>`<div class="hb"><span class="nm">${esc(k)}</span><span class="tr"><span class="fl" style="width:${v/gmax*100}%"></span></span><span class="vl">${v}</span></div>`).join("")||'<div class="empty">장르 데이터 없음</div>'}
+  <div class="card c-6"><h3>가장 자주 만난 장르 <span class="mono">GENRE · 클릭하면 모아보기</span></h3><div class="hbar" id="dash-genres">
+    ${genres.map(([k,v])=>`<div class="hb clickable" data-ax="genre" data-gv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="tr"><span class="fl" style="width:${v/gmax*100}%"></span></span><span class="vl">${v}</span></div>`).join("")||'<div class="empty">장르 데이터 없음</div>'}
   </div></div>
 
   <div class="card c-6"><h3>가장 자주 만난 감독 <span class="mono">DIRECTOR</span></h3><div class="ranklist" id="dash-dirs">
     ${dirs.map(([k,v],i)=>`<div class="rk clickable" data-dir="${esc(k)}"><span class="no">${String(i+1).padStart(2,"0")}</span><span class="nm">${esc(k)}</span><span class="vl">${v}편</span></div>`).join("")||'<div class="empty">감독 데이터 없음</div>'}
   </div></div>
 
-  <div class="card c-6"><h3>나의 극장 <span class="mono">THEATER</span></h3><div class="hbar">
-    ${places.map(([k,v])=>`<div class="hb"><span class="nm">${esc(k)}</span><span class="tr"><span class="fl" style="width:${v/pmax*100}%"></span></span><span class="vl">${v}회</span></div>`).join("")||'<div class="empty">극장 기록 없음</div>'}
+  <div class="card c-6"><h3>나의 극장 <span class="mono">THEATER</span></h3><div class="hbar" id="dash-places">
+    ${places.map(([k,v])=>`<div class="hb clickable" data-ax="plat" data-gv="${esc(k.split(" ")[0])}"><span class="nm">${esc(k)}</span><span class="tr"><span class="fl" style="width:${v/pmax*100}%"></span></span><span class="vl">${v}회</span></div>`).join("")||'<div class="empty">극장 기록 없음</div>'}
   </div></div>
 
   <div class="card c-6"><h3>넷플릭스 평가 분포 <span class="mono">MY RATINGS · 작품 기준</span></h3>
@@ -87,8 +87,9 @@ function renderDash(){
 
   countUp($("#kpi-total"), V.length);
 
-  /* 감독 클릭 → 탐색 탭 감독 상세 / 재관람 클릭 → 모달 */
+  /* 감독 클릭 → 탐색 탭 감독 상세 / 재관람 클릭 → 모달 / 막대 클릭 → 해당 축 모아보기 */
   $$("#dash-dirs .rk").forEach(el => el.onclick = () => openDirector(el.dataset.dir));
+  $$("#dash-grid .hb.clickable").forEach(el => el.onclick = () => openExplore(el.dataset.ax, el.dataset.gv));
   $$("#dash-re .rk").forEach(el => el.onclick = () => {
     const r = V.find(x=>x.key===el.dataset.key);
     if (r) openModal(r);

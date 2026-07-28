@@ -68,8 +68,8 @@ function openEdit(r){
           <option value="movie" ${r.ntype==="movie"?"selected":""}>movie</option>
           <option value="tv" ${r.ntype==="tv"?"selected":""}>tv</option></select></div>
       </div>
-      ${sameCount > 1 ? `<label class="ed-chk"><input type="checkbox" id="e-all" checked>
-        같은 작품 <b>${sameCount}회차 전체</b>에 작품 정보 함께 적용</label>` : ""}
+      ${sameCount > 1 ? `<label class="ed-chk"><input type="checkbox" id="e-all">
+        같은 작품 <b>${sameCount}회차 전체</b>에 작품 정보 함께 적용 <span class="sub">(저장 시 다시 확인합니다)</span></label>` : ""}
     </div>
 
     <div class="ed-sec"><div class="ed-h">관람 정보 <span class="sub">이 회차만</span></div>
@@ -171,6 +171,26 @@ async function submitEdit(){
   const applyAll = $("#e-all")?.checked;
   const targets = applyAll ? S.rows.filter(x => x.key === r.key) : [r];
 
+  /* ★ 여러 행 일괄 적용은 명시적 확인을 거친다 — '(제목 미상)' 랑종 전파 사고 재발 방지 */
+  if (targets.length > 1){
+    const dates = targets.map(t => t.date).sort();
+    const ok = window.confirm(
+      `작품 정보를 이 작품의 관람 기록 ${targets.length}건 전체에 적용합니다.\n`
+      + `대상: no.${targets.map(t=>t.no).join(", ")}\n`
+      + `관람일: ${dates[0]} ~ ${dates[dates.length-1]}\n\n계속할까요?`);
+    if (!ok) return;
+  }
+
+  /* 수정 전 값 스냅샷 — 되돌리기 + 콘솔 기록 */
+  const WORK_KEYS = Object.keys(work), VIEW_KEYS = Object.keys(view);
+  const snap = targets.map(t => {
+    const s = { no: t.no };
+    WORK_KEYS.forEach(k => s[k] = t[k]);
+    if (t === r) VIEW_KEYS.forEach(k => s[k] = t[k]);
+    return s;
+  });
+  console.log("[cine] 수정 전 값 백업:"); console.table(snap);
+
   const btn = $("#e-save");
   btn.disabled = true; btn.textContent = "저장 중…";
   try {
@@ -187,11 +207,123 @@ async function submitEdit(){
 
     buildKeys(); renderStrip(); applyFilters();
     closeEdit(); closeModal();
-    toast(`‘${work.title}’ 수정 완료`);
+
+    /* 되돌리기 — 스냅샷을 역방향 update로 전송 */
+    toast(`‘${work.title}’ 수정 완료`, "", { label: "되돌리기", fn: async () => {
+      try {
+        await gsPost({ action:"update", updates: snap.map(s => {
+          const { no, ...fields } = s;
+          return { nos: [no], fields };
+        })});
+        snap.forEach(s => {
+          const t = S.rows.find(x => String(x.no) === String(s.no));
+          if (t){ const { no, ...fields } = s; Object.assign(t, fields);
+            t.med = medium(t.plat); t.y = +t.date.slice(0,4); t.m = +t.date.slice(5,7); }
+        });
+        buildKeys(); renderStrip(); applyFilters();
+        toast("수정 전 값으로 되돌렸습니다");
+      } catch(e){ toast("되돌리기 실패: " + e.message, "warn"); }
+    }});
   } catch(e){
     toast("저장 실패: " + e.message, "warn"); console.error(e);
   }
   btn.disabled = false; btn.textContent = "시트에 저장";
+}
+
+/* ==================================================================
+   ⓪-2 병합 · 삭제
+   ================================================================== */
+
+/* 출처 우선순위 (아카이브 규칙): MY페이지 > 예매내역 > Gmail > 넷플릭스 > 가계부 > 캘린더 > Weekly */
+const SRC_PRIORITY = ["MY페이지","예매","Gmail","지메일","넷플릭스","가계부","캘린더","Weekly"];
+function srcRank(s){
+  s = s || "";
+  for (let i = 0; i < SRC_PRIORITY.length; i++) if (s.includes(SRC_PRIORITY[i])) return i;
+  return SRC_PRIORITY.length;
+}
+const filledCount = r => ["plat","place","time","eps","rate","review","year","dir","genre","tmdb","memo"]
+  .filter(k => r[k]).length;
+
+/* 병합안 구성 — 대표행 + 대표행에 적용할 fields + 삭제할 no 목록 */
+function composeMerge(rows){
+  const sorted = [...rows].sort((a,b) =>
+    srcRank(a.src) - srcRank(b.src) || filledCount(b) - filledCount(a) || (a.date < b.date ? -1 : 1));
+  const primary = sorted[0], others = sorted.slice(1);
+  const fields = {};
+
+  /* 제목: 대표행이 의미 없는 제목이고 다른 행에 정식 제목이 있으면 그걸 채택 */
+  if (isJunkTitle(primary.title)){
+    const named = sorted.find(x => !isJunkTitle(x.title));
+    if (named){ fields.title = named.title; if (named.season) fields.season = named.season; }
+  }
+  /* 빈 칸만 채움 (기존 값 덮어쓰지 않음). tmdb는 타입과 함께 이동 */
+  ["plat","place","time","eps","rate","review","year","dir","genre","nation","season","nflx","cat","grade"]
+    .forEach(k => {
+      if (primary[k]) return;
+      const donor = others.find(o => o[k]);
+      if (donor) fields[k] = donor[k];
+    });
+  if (!primary.tmdb){
+    const donor = others.find(o => o.tmdb);
+    if (donor){ fields.tmdb = donor.tmdb; if (donor.ntype) fields.ntype = donor.ntype; }
+  }
+  /* 이어붙이기 — 중복 문구 제외 */
+  const joinUniq = (key, sep) => {
+    const parts = [];
+    sorted.forEach(x => (x[key]||"").split(sep).map(s=>s.trim()).filter(Boolean)
+      .forEach(p => { if (!parts.includes(p)) parts.push(p); }));
+    return parts.join(sep.trim() ? ` ${sep.trim()} ` : sep);
+  };
+  const memo = joinUniq("memo", "/"), note = joinUniq("note", "|"), src = joinUniq("src", "+");
+  if (memo !== (primary.memo||"")) fields.memo = memo;
+  if (note !== (primary.note||"")) fields.note = note;
+  if (src  !== (primary.src ||"")) fields.src  = src;
+  /* 날짜 — 이른 쪽을 시작일로, 대표 날짜는 늦은 쪽 (시리즈 종료일 대표 규칙과 일치) */
+  const allDates = sorted.flatMap(x => [x.date, x.start]).filter(Boolean).sort();
+  if (allDates[0] !== primary.start) fields.start = allDates[0];
+  if (allDates[allDates.length-1] !== primary.date) fields.date = allDates[allDates.length-1];
+
+  return { primary, fields, deleteNos: others.map(o => String(o.no)) };
+}
+
+async function mergeViewings(rows){
+  const plan = composeMerge(rows);
+  const changed = Object.keys(plan.fields);
+  const ok = window.confirm(
+    `${rows.length}건을 병합합니다.\n\n`
+    + `대표: no.${plan.primary.no} ‘${plan.primary.title}’ (출처: ${plan.primary.src || "—"})\n`
+    + `삭제: no.${plan.deleteNos.join(", ")}\n`
+    + (changed.length ? `대표행에 채워지는 값: ${changed.join(", ")}\n` : "")
+    + `\n삭제된 행은 되돌릴 수 없습니다. 계속할까요?`);
+  if (!ok) return;
+
+  console.log("[cine] 병합 전 값 백업:");
+  console.table(rows.map(x => ({ no:x.no, title:x.title, date:x.date, plat:x.plat, src:x.src, memo:x.memo })));
+
+  try {
+    await gsPost({ action:"merge", primaryNo: String(plan.primary.no), fields: plan.fields, deleteNos: plan.deleteNos });
+    Object.assign(plan.primary, plan.fields);
+    plan.primary.med = medium(plan.primary.plat);
+    plan.primary.y = +plan.primary.date.slice(0,4); plan.primary.m = +plan.primary.date.slice(5,7);
+    S.rows = S.rows.filter(x => !plan.deleteNos.includes(String(x.no)));
+    buildKeys(); renderStrip(); applyFilters();
+    closeModal();
+    toast(`병합 완료 — no.${plan.primary.no}만 남기고 ${plan.deleteNos.length}행 삭제됨 (백업은 콘솔에)`);
+  } catch(e){ toast("병합 실패: " + e.message, "warn"); console.error(e); }
+}
+
+async function deleteViewing(r){
+  const ok = window.confirm(
+    `no.${r.no} ‘${r.title}’ (${r.date}) 기록을 시트에서 삭제합니다.\n되돌릴 수 없습니다. 계속할까요?`);
+  if (!ok) return;
+  console.log("[cine] 삭제 전 값 백업:"); console.table([r]);
+  try {
+    await gsPost({ action:"delete", nos: [String(r.no)] });
+    S.rows = S.rows.filter(x => String(x.no) !== String(r.no));
+    buildKeys(); renderStrip(); applyFilters();
+    closeModal();
+    toast(`no.${r.no} 삭제 완료 (삭제 전 값은 콘솔에)`);
+  } catch(e){ toast("삭제 실패: " + e.message, "warn"); console.error(e); }
 }
 
 /* ==================================================================

@@ -44,6 +44,14 @@ const normT = t => (t||"").replace(/\(.*?\)/g,"").replace(/[\s,.\-:·'"“”<>�
 /* 백필용 — 원문 제목 그대로(공백만 정리). 정규화보다 엄격해 오병합을 막는다 */
 const rawT = t => (t||"").trim().replace(/\s+/g," ").toLowerCase();
 
+/* ★ 의미 없는 제목: 작품을 특정하지 못하므로 제목으로 행을 묶으면 안 된다
+   ('(제목 미상)' 7행이 하나의 작품으로 묶여 랑종이 전파된 사고의 재발 방지) */
+const JUNK_TITLE_RE = /^(\(?제목\s*미상\)?|영화|예매|아이맥스|imax|엄빠영화|독서모임|넷플릭스|ott|극장|다큐(멘터리)?|시리즈|드라마)$|^\d+(\.\d+)?$/i;
+function isJunkTitle(t){
+  t = (t||"").trim();
+  return !t || JUNK_TITLE_RE.test(t) || normT(t).length <= 1;
+}
+
 function topN(arr, keyf, n){
   const c = {};
   arr.forEach(r => { const k = keyf(r); if (k) c[k] = (c[k]||0)+1; });
@@ -94,7 +102,7 @@ function mapRow(h, r){
   return {
     no: g("no"), date, start: g("시작일").slice(0,10)||date, cat, plat,
     place: g("위치/지점"), title, eps: g("화수"), time: g("상영시각"),
-    src: g("출처"), memo: g("동반/메모"), rate: g("평점"), review: g("한줄평"),
+    src: g("출처"), note: g("비고(원본)"), memo: g("동반/메모"), rate: g("평점"), review: g("한줄평"),
     year: (g("개봉연도")||"").replace(/\.0$/,""),
     dir:  g("감독") || g("TMDB제작/감독"),                 // KOBIS 우선
     genre: (g("장르") || g("TMDB장르")).replace(/공포\(호러\)/g,"공포").replace(/모험/g,"어드벤처"),
@@ -111,16 +119,22 @@ function mapRow(h, r){
    ★ 시즌이 있으면 같은 ID라도 다른 작품 (F1 시즌1·5·6·7·8 = 5편) */
 function buildKeys(){
   // 1) 제목→ID 백필: 같은 작품인데 한쪽 행에만 ID가 있는 경우(재관람 지연기록 등) 보정
+  //    ★ 의미 없는 제목은 시드로도, 대상으로도 쓰지 않는다 — 동일 문자열이어도 같은 작품이란 보장이 없음
   const t2id = {};
-  S.rows.forEach(r => { if (r.tmdb) t2id[rawT(r.title)+"|"+(r.season||"")] = r.tmdb+"|"+r.ntype; });
   S.rows.forEach(r => {
-    if (!r.tmdb){
+    if (r.tmdb && !isJunkTitle(r.title)) t2id[rawT(r.title)+"|"+(r.season||"")] = r.tmdb+"|"+r.ntype;
+  });
+  S.rows.forEach((r, i) => {
+    if (!r.tmdb && !isJunkTitle(r.title)){
       const hit = t2id[rawT(r.title)+"|"+(r.season||"")];
       if (hit){ const [id,ty] = hit.split("|"); r.tmdb = id; r.ntype = r.ntype || ty; }
     }
-    r.key = r.tmdb ? `id:${r.tmdb}:s${r.season||0}` : normT(r.title);
+    // 2) 작품 키 — 의미 없는 제목 + ID 없음 = 행마다 별개 작품
+    r.key = r.tmdb ? `id:${r.tmdb}:s${r.season||0}`
+          : isJunkTitle(r.title) ? `row:${r.no || "i"+i}`
+          : normT(r.title);
   });
-  // 2) 재관람 집합
+  // 3) 재관람 집합
   const c = {};
   S.rows.forEach(r => { c[r.key] = (c[r.key]||0)+1; });
   S.rewatch = new Set(Object.keys(c).filter(k => c[k] > 1));

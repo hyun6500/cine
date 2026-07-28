@@ -24,19 +24,35 @@ function countUp(el, to, ms = 700){
 }
 
 /* ---------------- 토스트 ---------------- */
-function toast(msg, kind = ""){
+/* action = { label, fn } — 되돌리기 등. 지정 시 표시 시간이 길어진다 */
+function toast(msg, kind = "", action = null){
   const t = document.createElement("div");
   t.className = "toast " + kind;
   t.textContent = msg;
+  if (action){
+    const b = document.createElement("button");
+    b.className = "tact"; b.textContent = action.label;
+    b.onclick = () => { action.fn(); t.remove(); };
+    t.appendChild(b);
+  }
   $("#toasts").appendChild(t);
   requestAnimationFrame(() => t.classList.add("in"));
-  setTimeout(() => { t.classList.remove("in"); setTimeout(() => t.remove(), 300); }, 3200);
+  setTimeout(() => { t.classList.remove("in"); setTimeout(() => t.remove(), 300); }, action ? 8000 : 3200);
 }
 
 /* ---------------- 상세 모달 ---------------- */
 /* 탐색 이동용 링크 조각 */
 function xlink(axis, val, cls){
   return `<button class="xlink${cls?" "+cls:""}" data-ax="${esc(axis)}" data-gv="${esc(val)}">${esc(val)}</button>`;
+}
+
+/* 외부 링크: TMDB_ID가 있으면 작품 페이지, 없으면 제목 검색 */
+function tmdbUrl(r){
+  if (r.tmdb) return `https://www.themoviedb.org/${r.ntype || "movie"}/${r.tmdb}`;
+  return `https://www.themoviedb.org/search?query=${encodeURIComponent(r.title.replace(/\(.*?\)/g,"").trim())}`;
+}
+function kobisUrl(r){
+  return `https://www.kobis.or.kr/kobis/business/mast/mvie/searchMovieList.do?sMovLang=ko&sMovName=${encodeURIComponent(r.title.replace(/\(.*?\)/g,"").trim())}`;
 }
 
 function openModal(r){
@@ -54,17 +70,25 @@ function openModal(r){
     <div class="mo-poster" id="mp"><div class="ph2">${esc(r.title)}</div></div>
     <div class="mo-info">
       <div class="cat">${esc(r.cat)}${r.grade ? " · " + esc(r.grade) : ""}</div>
-      <h2>${esc(r.title)}${seasonTag(r)}</h2>
+      <h2><a class="tlink" href="${tmdbUrl(r)}" target="_blank" rel="noopener"
+        title="${r.tmdb ? "TMDB 작품 페이지 열기" : "TMDB에서 제목 검색"}">${esc(r.title)}<span class="ext">↗</span></a>${seasonTag(r)}</h2>
+      <div class="xtra"><a href="${tmdbUrl(r)}" target="_blank" rel="noopener">TMDB${r.tmdb ? ` <span class="mono">${esc((r.ntype||"movie")+"/"+r.tmdb)}</span>` : " 검색"}</a>
+        <a href="${kobisUrl(r)}" target="_blank" rel="noopener">KOBIS 검색</a></div>
       <div class="meta">${meta.join(" · ") || '<span class="nodata">작품 정보 없음 — 아래 수정에서 채울 수 있습니다</span>'}</div>
       ${gens.length ? `<div class="gpills">${gens.map(g=>xlink("genre", g, "gpill")).join("")}</div>` : ""}
       ${r.nflx ? `<div class="nfx-line">${nflxBadge(r, true)} <span>넷플릭스에서 ‘${esc(r.nflx)}’로 평가</span></div>` : ""}
-      <div class="mo-log"><h4>MY LOG · ${all.length}회 관람</h4>
+      <div class="mo-log">
+        <div class="mo-log-head"><h4>MY LOG · ${all.length}회 관람</h4>
+          ${all.length > 1 ? '<button class="vmerge" id="vmerge" disabled>선택 병합 (2개 이상 체크)</button>' : ""}</div>
         ${all.map(v => `<div class="viewing">
+          ${all.length > 1 ? `<input type="checkbox" class="vsel" data-no="${esc(v.no)}" aria-label="병합 대상 선택">` : ""}
+          <div class="vgrid">
           <span class="k">DATE</span><span class="v">${v.start!==v.date ? esc(v.start)+" ~ " : ""}${esc(v.date)}${v.eps ? ` <span class="sub">(${esc(v.eps)}화)</span>` : ""}${v.season ? ` <span class="sub">시즌 ${esc(v.season)}</span>` : ""}</span>
           ${v.plat ? `<span class="k">WHERE</span><span class="v">${xlink("plat", v.plat)}${v.place && v.place!==v.plat ? ` <span class="sub">${esc(v.place)}</span>` : ""}${v.time ? ` <span class="sub">${esc(v.time)}</span>` : ""}</span>` : ""}
           ${v.memo ? `<span class="k">WITH</span><span class="v">${esc(v.memo)}</span>` : ""}
           ${v.rate ? `<span class="k">RATE</span><span class="v">★ ${esc(v.rate)}</span>` : ""}
-          <span class="k"></span><span class="v"><button class="vedit" data-no="${esc(v.no)}">수정</button></span>
+          <span class="k"></span><span class="v vbtns"><button class="vedit" data-no="${esc(v.no)}">수정</button><button class="vedit vdel" data-no="${esc(v.no)}">삭제</button></span>
+          </div>
         </div>`).join("")}
         ${(() => { const rv = all.find(v=>v.review); return rv ? `<div class="mo-quote">“${esc(rv.review)}”</div>` : ""; })()}
       </div>
@@ -75,11 +99,30 @@ function openModal(r){
     closeModal();
     openExplore(b.dataset.ax, b.dataset.gv);
   });
-  /* 회차 수정 */
-  $("#modal-body").querySelectorAll(".vedit").forEach(b => b.onclick = () => {
+  /* 회차 수정 · 삭제 */
+  $("#modal-body").querySelectorAll(".vedit:not(.vdel)").forEach(b => b.onclick = () => {
     const v = all.find(x => String(x.no) === b.dataset.no);
     if (v) openEdit(v);
   });
+  $("#modal-body").querySelectorAll(".vdel").forEach(b => b.onclick = () => {
+    const v = all.find(x => String(x.no) === b.dataset.no);
+    if (v) deleteViewing(v);
+  });
+  /* 회차 병합 */
+  const mb = $("#vmerge");
+  if (mb){
+    const sync = () => {
+      const n = $("#modal-body").querySelectorAll(".vsel:checked").length;
+      mb.disabled = n < 2;
+      mb.textContent = n < 2 ? "선택 병합 (2개 이상 체크)" : `선택 ${n}건 병합`;
+    };
+    $("#modal-body").querySelectorAll(".vsel").forEach(c => c.onchange = sync);
+    mb.onclick = () => {
+      const nos = [...$("#modal-body").querySelectorAll(".vsel:checked")].map(c => c.dataset.no);
+      const rows = all.filter(v => nos.includes(String(v.no)));
+      if (rows.length >= 2) mergeViewings(rows);
+    };
+  }
 
   posterFor(r).then(p => { if (p) $("#mp").innerHTML = `<img src="${IMG}w500${p}" alt="${esc(r.title)} 포스터">`; });
   const bg = $("#modal-bg");
