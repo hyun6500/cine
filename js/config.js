@@ -15,7 +15,7 @@ window.CINE_CONFIG = {
   TMDB_KEY: "cf02e99c2d012e292753b5fb79fcc5dc",
 
   /* ↓ 배포 관리에서 복사한 전체 URL로 교체 (…로 끝나면 안 됩니다) */
-  APPS_SCRIPT_URL: "",
+  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbysMG_tYdvNHuJGT7DHZsDsyrIGlRz-v8lEhCKVmMj6p3tu4Kulqf1_RKoUKpWXKsiu/exec",
 };
 
 /* ★ 편집 비밀번호(APP_TOKEN)는 더 이상 여기 두지 않습니다.
